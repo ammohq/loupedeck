@@ -4,7 +4,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 
 ## Documentation
 
-[ ] 1. Create comprehensive README.md with installation instructions, basic usage examples, and project overview
+[x] 1. Create comprehensive README.md with installation instructions, basic usage examples, and project overview
 [ ] 2. Add docstrings to all classes and methods following a consistent format (e.g., NumPy or Google style)
 [ ] 3. Create API documentation using a tool like Sphinx
 [ ] 4. Add usage examples for different Loupedeck device models
@@ -34,7 +34,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 
 [x] 20. Implement network scanning for WebSocket devices
 [x] 21. Add support for custom button mapping
-[ ] 22. Implement a higher-level API for common operations
+[x] 22. Implement a higher-level API for common operations
 [x] 23. Add support for displaying images on the device screens
 [x] 24. Create a context manager for device connections
 [x] 25. Implement automatic reconnection for lost connections
