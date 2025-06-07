@@ -148,14 +148,13 @@ class LoupedeckDevice(EventEmitter):
         if hasattr(self.connection, "connect"):
             self.logger.debug("Establishing connection")
             if asyncio.iscoroutinefunction(self.connection.connect):
-                import asyncio
                 self.logger.debug("Using asyncio for connection")
                 asyncio.get_event_loop().run_until_complete(self.connection.connect())
             else:
                 self.connection.connect()
 
         # Store event handler references for later cleanup
-        self._connect_handler = self.emit.bind(self, "connect")
+        self._connect_handler = lambda data: self.emit("connect", data)
         self._message_handler = self.on_receive
         self._disconnect_handler = self._handle_disconnect
 
@@ -195,7 +194,6 @@ class LoupedeckDevice(EventEmitter):
             if hasattr(self.connection, "close"):
                 self.logger.debug("Closing connection")
                 if asyncio.iscoroutinefunction(self.connection.close):
-                    import asyncio
                     self.logger.debug("Using asyncio for closing connection")
                     asyncio.get_event_loop().run_until_complete(self.connection.close())
                 else:
@@ -222,7 +220,6 @@ class LoupedeckDevice(EventEmitter):
 
         if hasattr(self.connection, "send"):
             if asyncio.iscoroutinefunction(self.connection.send):
-                import asyncio
                 self.logger.debug("Using asyncio for sending data")
                 asyncio.get_event_loop().run_until_complete(
                     self.connection.send(packet)

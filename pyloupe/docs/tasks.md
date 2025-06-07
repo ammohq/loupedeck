@@ -15,9 +15,9 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 [x] 6. Set up a testing framework (pytest recommended)
 [x] 7. Create unit tests for utility functions (color.py, util.py)
 [x] 8. Create unit tests for the parser (parser.py)
-[ ] 9. Create mock objects for device connections to enable testing without physical devices
-[ ] 10. Implement integration tests for device communication
-[ ] 11. Set up continuous integration (CI) using GitHub Actions or similar
+[x] 9. Create mock objects for device connections to enable testing without physical devices
+[x] 10. Implement integration tests for device communication
+[x] 11. Set up continuous integration (CI) using GitHub Actions or similar
 
 ## Code Quality and Structure
 
