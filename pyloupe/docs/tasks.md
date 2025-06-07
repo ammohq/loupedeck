@@ -5,7 +5,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 ## Documentation
 
 [x] 1. Create comprehensive README.md with installation instructions, basic usage examples, and project overview
-[ ] 2. Add docstrings to all classes and methods following a consistent format (e.g., NumPy or Google style)
+[x] 2. Add docstrings to all classes and methods following a consistent format (e.g., NumPy or Google style)
 [ ] 3. Create API documentation using a tool like Sphinx
 [ ] 4. Add usage examples for different Loupedeck device models
 [ ] 5. Document the communication protocol used by Loupedeck devices
@@ -45,7 +45,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 [ ] 27. Optimize the color conversion functions for better performance
 [x] 28. Implement connection timeouts and retries
 [x] 29. Add proper resource cleanup for connections
-[ ] 30. Implement rate limiting for commands to prevent device overload
+[x] 30. Implement rate limiting for commands to prevent device overload
 [ ] 31. Add proper error reporting for device communication issues
 
 ## Packaging and Distribution

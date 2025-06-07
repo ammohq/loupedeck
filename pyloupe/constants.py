@@ -1,3 +1,5 @@
+"""Constants used throughout the PyLoupe project."""
+
 BUTTONS = {
     0x00: "knobCT",
     0x01: "knobTL",
@@ -98,3 +100,7 @@ HAPTIC = {
 }
 
 MAX_BRIGHTNESS = 10
+
+# Minimum interval between commands (in milliseconds) to avoid overwhelming
+# the device. Can be overridden per device instance.
+DEFAULT_COMMAND_INTERVAL = 50

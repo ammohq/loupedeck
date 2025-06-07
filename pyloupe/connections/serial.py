@@ -1,3 +1,5 @@
+"""Serial connection handling for Loupedeck devices."""
+
 import serial
 from serial.tools import list_ports
 from ..parser import MagicByteLengthParser
@@ -19,16 +21,28 @@ class LoupedeckSerialConnection(Connection):
     logger = get_logger("connection.serial")
 
     def __init__(
-        self, 
+        self,
         path: str | None = None,
         timeout: float = 1.0,
         max_retries: int = 3,
         retry_delay: float = 1.0
     ):
+        """Create a new serial connection instance.
+
+        Args:
+            path: Path to the serial device.
+            timeout: Read/write timeout in seconds.
+            max_retries: Number of connection retries.
+            retry_delay: Delay in seconds between retries.
+        """
+
         super().__init__()
         self.logger.debug(
             "Initializing serial connection (path=%s, timeout=%s, max_retries=%s, retry_delay=%s)",
-            path, timeout, max_retries, retry_delay
+            path,
+            timeout,
+            max_retries,
+            retry_delay,
         )
         self.path = path
         self.timeout = timeout
@@ -38,6 +52,7 @@ class LoupedeckSerialConnection(Connection):
 
     @classmethod
     def discover(cls):
+        """Discover serial Loupedeck devices connected to the system."""
         cls.logger.info("Discovering serial Loupedeck devices")
         results = []
 
@@ -71,6 +86,7 @@ class LoupedeckSerialConnection(Connection):
         return results
 
     def close(self):
+        """Close the serial port and emit a disconnect event."""
         self.logger.info("Closing serial connection")
 
         if not self.connection:
@@ -104,6 +120,7 @@ class LoupedeckSerialConnection(Connection):
         self.logger.info("Disconnected")
 
     def connect(self):
+        """Open the serial port and perform WebSocket handshake."""
         self.logger.info("Connecting to serial device")
 
         if not self.path:
@@ -164,11 +181,13 @@ class LoupedeckSerialConnection(Connection):
                 raise ConnectionError(f"Failed to connect to {self.path}: {str(last_error)}")
 
     def is_ready(self):
+        """Return ``True`` if the underlying serial port is open."""
         is_ready = self.connection is not None and self.connection.is_open
         self.logger.debug("Connection ready: %s", is_ready)
         return is_ready
 
     def read(self):
+        """Read data from the serial port and emit messages."""
         if not self.connection:
             self.logger.warning("Cannot read: connection not ready")
             return
@@ -202,6 +221,7 @@ class LoupedeckSerialConnection(Connection):
             self.logger.error("Error reading from serial port: %s", str(e))
 
     def send(self, buff: bytes, raw: bool = False, retry_on_error: bool = True):
+        """Send data over the serial connection."""
         if not self.connection:
             self.logger.warning("Cannot send: connection not ready")
             from ..exceptions import CommandError
