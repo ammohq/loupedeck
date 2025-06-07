@@ -22,8 +22,8 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 ## Code Quality and Structure
 
 [x] 12. Add type hints to all functions and methods
-[ ] 13. Set up static type checking with mypy
-[ ] 14. Implement proper error handling throughout the codebase
+[x] 13. Set up static type checking with mypy
+[x] 14. Implement proper error handling throughout the codebase
 [x] 15. Add logging throughout the codebase
 [x] 16. Set up linting with flake8 or pylint
 [x] 17. Refactor the EventEmitter class to support removing event listeners
@@ -43,7 +43,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 ## Performance and Reliability
 
 [ ] 27. Optimize the color conversion functions for better performance
-[ ] 28. Implement connection timeouts and retries
+[x] 28. Implement connection timeouts and retries
 [x] 29. Add proper resource cleanup for connections
 [ ] 30. Implement rate limiting for commands to prevent device overload
 [ ] 31. Add proper error reporting for device communication issues

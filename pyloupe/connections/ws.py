@@ -21,17 +21,34 @@ class LoupedeckWSConnection(Connection):
     # Class logger
     logger = get_logger("connection.ws")
 
-    def __init__(self, host: str | None = None):
+    def __init__(
+        self, 
+        host: str | None = None, 
+        connection_timeout: int = CONNECTION_TIMEOUT,
+        connect_timeout: float = 5.0,
+        max_retries: int = 3,
+        retry_delay: float = 1.0
+    ):
         super().__init__()
-        self.logger.debug("Initializing WebSocket connection (host=%s)", host)
+        self.logger.debug(
+            "Initializing WebSocket connection (host=%s, connection_timeout=%s, connect_timeout=%s, max_retries=%s, retry_delay=%s)",
+            host, connection_timeout, connect_timeout, max_retries, retry_delay
+        )
         self.host = host
         self.last_tick = None
-        self.connection_timeout = CONNECTION_TIMEOUT
+        self.connection_timeout = connection_timeout
+        self.connect_timeout = connect_timeout
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         self._keepalive_task = None
 
     @classmethod
-    def discover(cls):
+    def discover(cls, scan_timeout=10.0, device_timeout=0.5):
         """Discover Loupedeck devices on the local network.
+
+        Args:
+            scan_timeout (float): Maximum time in seconds to wait for the entire scan.
+            device_timeout (float): Timeout in seconds for each individual device check.
 
         Returns:
             list: A list of dictionaries containing device information.
@@ -44,8 +61,11 @@ class LoupedeckWSConnection(Connection):
 
         # Use asyncio to scan the network
         loop = asyncio.get_event_loop()
-        cls.logger.debug("Starting network scan")
-        devices = loop.run_until_complete(cls._scan_network(network_ranges))
+        cls.logger.debug("Starting network scan (scan_timeout=%.1f, device_timeout=%.1f)", 
+                        scan_timeout, device_timeout)
+        devices = loop.run_until_complete(
+            cls._scan_network(network_ranges, scan_timeout, device_timeout)
+        )
 
         cls.logger.info("Found %d devices", len(devices))
         return devices
@@ -89,11 +109,13 @@ class LoupedeckWSConnection(Connection):
         return network_ranges
 
     @classmethod
-    async def _scan_network(cls, network_ranges):
+    async def _scan_network(cls, network_ranges, scan_timeout=10.0, device_timeout=0.5):
         """Scan network ranges for Loupedeck devices.
 
         Args:
             network_ranges (list): A list of ipaddress.IPv4Network objects to scan.
+            scan_timeout (float): Maximum time in seconds to wait for the entire scan.
+            device_timeout (float): Timeout in seconds for each individual device check.
 
         Returns:
             list: A list of dictionaries containing device information.
@@ -101,38 +123,49 @@ class LoupedeckWSConnection(Connection):
         devices = []
         scan_tasks = []
 
+        cls.logger.debug("Starting network scan with timeout=%.1f, device_timeout=%.1f", 
+                        scan_timeout, device_timeout)
+
         # Create tasks for each IP in each network range
         for network in network_ranges:
             for ip in network.hosts():
                 ip_str = str(ip)
-                task = asyncio.create_task(cls._check_device(ip_str))
+                task = asyncio.create_task(cls._check_device(ip_str, timeout=device_timeout))
                 scan_tasks.append(task)
 
+        cls.logger.debug("Created %d scan tasks", len(scan_tasks))
+
         # Wait for all tasks to complete (with timeout)
-        done, pending = await asyncio.wait(scan_tasks, timeout=5)
+        cls.logger.debug("Waiting for scan tasks to complete (timeout=%.1f)", scan_timeout)
+        done, pending = await asyncio.wait(scan_tasks, timeout=scan_timeout)
 
         # Cancel any pending tasks
-        for task in pending:
-            task.cancel()
+        if pending:
+            cls.logger.debug("Cancelling %d pending tasks", len(pending))
+            for task in pending:
+                task.cancel()
 
         # Collect results from completed tasks
         for task in done:
             try:
                 result = task.result()
                 if result:
+                    cls.logger.debug("Found device: %s", result)
                     devices.append(result)
-            except Exception:
-                pass
+            except Exception as e:
+                cls.logger.debug("Error processing scan result: %s", str(e))
 
+        cls.logger.debug("Network scan completed, found %d devices", len(devices))
         return devices
 
     @classmethod
-    async def _check_device(cls, ip, port=DEFAULT_WS_PORT):
+    async def _check_device(cls, ip, port=DEFAULT_WS_PORT, timeout=0.5):
         """Check if a device at the given IP and port is a Loupedeck device.
 
         Args:
             ip (str): The IP address to check.
             port (int): The port to check.
+            timeout (float): Connection timeout in seconds.
 
         Returns:
             dict or None: Device information if a Loupedeck device is found, None otherwise.
@@ -140,15 +173,20 @@ class LoupedeckWSConnection(Connection):
         uri = f"ws://{ip}:{port}"
 
         try:
-            # Try to establish a WebSocket connection with a short timeout
-            connection = await asyncio.wait_for(websockets.connect(uri), timeout=0.5)
+            # Try to establish a WebSocket connection with the specified timeout
+            cls.logger.debug("Checking device at %s (timeout=%.1f)", uri, timeout)
+            connection = await asyncio.wait_for(websockets.connect(uri), timeout=timeout)
 
             # If we can connect, it might be a Loupedeck device
             await connection.close()
+            cls.logger.debug("Successfully connected to %s", uri)
 
             return {"connectionType": cls, "host": ip, "port": port, "address": uri}
-        except Exception:
-            # Not a Loupedeck device or connection failed
+        except asyncio.TimeoutError:
+            cls.logger.debug("Connection to %s timed out after %.1f seconds", uri, timeout)
+            return None
+        except Exception as e:
+            cls.logger.debug("Failed to connect to %s: %s", uri, str(e))
             return None
 
     async def connect(self):
@@ -160,19 +198,46 @@ class LoupedeckWSConnection(Connection):
         self.address = f"ws://{self.host}"
         self.logger.debug("Connecting to %s", self.address)
 
-        try:
-            self.connection = await websockets.connect(self.address)
-            self.logger.debug("WebSocket connection established")
+        retry_count = 0
+        last_error = None
 
-            self.last_tick = asyncio.get_event_loop().time()
-            self._keepalive_task = asyncio.create_task(self._check_connected())
-            self.logger.debug("Started keepalive task")
+        while retry_count <= self.max_retries:
+            try:
+                if retry_count > 0:
+                    self.logger.info("Retry attempt %d of %d", retry_count, self.max_retries)
+                    await asyncio.sleep(self.retry_delay)
 
-            self.emit("connect", {"address": self.address})
-            self.logger.info("Connection successful")
-        except Exception as e:
-            self.logger.error("Connection failed: %s", str(e))
-            raise
+                self.logger.debug("Connecting with timeout of %.1f seconds", self.connect_timeout)
+                self.connection = await asyncio.wait_for(
+                    websockets.connect(self.address),
+                    timeout=self.connect_timeout
+                )
+                self.logger.debug("WebSocket connection established")
+
+                self.last_tick = asyncio.get_event_loop().time()
+                self._keepalive_task = asyncio.create_task(self._check_connected())
+                self.logger.debug("Started keepalive task")
+
+                self.emit("connect", {"address": self.address})
+                self.logger.info("Connection successful")
+                return  # Connection successful, exit the retry loop
+            except asyncio.TimeoutError as e:
+                last_error = e
+                self.logger.warning("Connection timed out after %.1f seconds", self.connect_timeout)
+                retry_count += 1
+            except Exception as e:
+                last_error = e
+                self.logger.error("Connection failed: %s", str(e))
+                retry_count += 1
+
+        # If we get here, all retries have failed
+        self.logger.error("All connection attempts failed after %d retries", self.max_retries)
+        if last_error:
+            from ..exceptions import ConnectionTimeoutError, ConnectionError
+            if isinstance(last_error, asyncio.TimeoutError):
+                raise ConnectionTimeoutError(device=self.host)
+            else:
+                raise ConnectionError(f"Failed to connect to {self.address}: {str(last_error)}")
 
     async def close(self):
         self.logger.info("Closing WebSocket connection")
