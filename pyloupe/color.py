@@ -1,8 +1,8 @@
 def parse_color(color):
     if isinstance(color, str):
-        c = color.lstrip('#')
+        c = color.lstrip("#")
         if len(c) == 3:
-            c = ''.join(ch * 2 for ch in c)
+            c = "".join(ch * 2 for ch in c)
         r = int(c[0:2], 16)
         g = int(c[2:4], 16)
         b = int(c[4:6], 16)
@@ -11,5 +11,4 @@ def parse_color(color):
         r, g, b = color[:3]
         return int(r), int(g), int(b), 255
     else:
-        raise ValueError('Unsupported color format')
-
+        raise ValueError("Unsupported color format")

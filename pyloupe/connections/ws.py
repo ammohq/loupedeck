@@ -6,8 +6,8 @@ from ..constants import CONNECTION_TIMEOUT
 from . import Connection
 
 DISCONNECT_CODES = {
-    'NORMAL': 1000,
-    'TIMEOUT': 1006,
+    "NORMAL": 1000,
+    "TIMEOUT": 1006,
 }
 
 # Default port for Loupedeck WebSocket connections
@@ -57,18 +57,18 @@ class LoupedeckWSConnection(Connection):
             host_ip = socket.gethostbyname(hostname)
 
             # Create a /24 network from the host IP
-            ip_parts = host_ip.split('.')
-            network_prefix = '.'.join(ip_parts[0:3]) + '.0/24'
+            ip_parts = host_ip.split(".")
+            network_prefix = ".".join(ip_parts[0:3]) + ".0/24"
             network = ipaddress.IPv4Network(network_prefix, strict=False)
             network_ranges.append(network)
         except Exception:
             # Fallback to common local networks if we can't determine the host network
             common_networks = [
-                '192.168.0.0/24',
-                '192.168.1.0/24',
-                '10.0.0.0/24',
-                '10.0.1.0/24',
-                '172.16.0.0/24'
+                "192.168.0.0/24",
+                "192.168.1.0/24",
+                "10.0.0.0/24",
+                "10.0.1.0/24",
+                "172.16.0.0/24",
             ]
             for net in common_networks:
                 try:
@@ -131,32 +131,24 @@ class LoupedeckWSConnection(Connection):
 
         try:
             # Try to establish a WebSocket connection with a short timeout
-            connection = await asyncio.wait_for(
-                websockets.connect(uri), 
-                timeout=0.5
-            )
+            connection = await asyncio.wait_for(websockets.connect(uri), timeout=0.5)
 
             # If we can connect, it might be a Loupedeck device
             await connection.close()
 
-            return {
-                'connectionType': cls,
-                'host': ip,
-                'port': port,
-                'address': uri
-            }
+            return {"connectionType": cls, "host": ip, "port": port, "address": uri}
         except Exception:
             # Not a Loupedeck device or connection failed
             return None
 
     async def connect(self):
         if not self.host:
-            raise ValueError('host is required')
-        self.address = f'ws://{self.host}'
+            raise ValueError("host is required")
+        self.address = f"ws://{self.host}"
         self.connection = await websockets.connect(self.address)
         self.last_tick = asyncio.get_event_loop().time()
         self._keepalive_task = asyncio.create_task(self._check_connected())
-        self.emit('connect', {'address': self.address})
+        self.emit("connect", {"address": self.address})
 
     async def close(self):
         # Cancel the keepalive task if it exists
@@ -179,7 +171,7 @@ class LoupedeckWSConnection(Connection):
         self.last_tick = None
 
         # Emit disconnect event
-        self.emit('disconnect', None)
+        self.emit("disconnect", None)
 
     def is_ready(self):
         return self.connection and not self.connection.closed
@@ -187,14 +179,16 @@ class LoupedeckWSConnection(Connection):
     async def _check_connected(self):
         while self.is_ready():
             await asyncio.sleep(self.connection_timeout / 1000)
-            if (asyncio.get_event_loop().time() - self.last_tick) * 1000 > self.connection_timeout:
-                await self.connection.close(code=DISCONNECT_CODES['TIMEOUT'])
+            if (
+                asyncio.get_event_loop().time() - self.last_tick
+            ) * 1000 > self.connection_timeout:
+                await self.connection.close(code=DISCONNECT_CODES["TIMEOUT"])
                 break
 
     async def read(self):
         async for message in self.connection:
             self.last_tick = asyncio.get_event_loop().time()
-            self.emit('message', message)
+            self.emit("message", message)
 
     async def send(self, data: bytes):
         await self.connection.send(data)

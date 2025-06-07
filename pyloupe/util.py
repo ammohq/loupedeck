@@ -9,6 +9,5 @@ def rgba2rgb565(rgba: bytes, pixel_size: int) -> bytes:
         green = rgba[i + 1]
         blue = rgba[i + 2]
         color = (blue >> 3) | ((green & 0xFC) << 3) | ((red & 0xF8) << 8)
-        struct.pack_into('<H', output, i // 2, color)
+        struct.pack_into("<H", output, i // 2, color)
     return bytes(output)
-

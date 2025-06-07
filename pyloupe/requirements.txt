@@ -1,0 +1,4 @@
+black
+websockets>=10.0
+pyserial>=3.5
+Pillow>=9.0

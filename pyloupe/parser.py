@@ -18,7 +18,7 @@ class MagicByteLengthParser:
             expected_end = position + next_length + 2
             if len(data) < expected_end:
                 break
-            packets.append(data[position + 2:expected_end])
+            packets.append(data[position + 2 : expected_end])
             data = data[expected_end:]
         self.buffer = data
         return packets
@@ -27,4 +27,3 @@ class MagicByteLengthParser:
         data = self.buffer
         self.buffer = b""
         return [data] if data else []
-

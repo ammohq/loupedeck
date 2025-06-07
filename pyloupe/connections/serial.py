@@ -7,7 +7,7 @@ WS_UPGRADE_HEADER = b"GET /index.html\r\nHTTP/1.1\r\nConnection: Upgrade\r\nUpgr
 WS_UPGRADE_RESPONSE = b"HTTP/1.1"
 WS_CLOSE_FRAME = bytes([0x88, 0x80, 0x00, 0x00, 0x00, 0x00])
 
-VENDOR_IDS = [0x2ec2, 0x1532]
+VENDOR_IDS = [0x2EC2, 0x1532]
 MANUFACTURERS = ["Loupedeck", "Razer"]
 
 
@@ -27,13 +27,15 @@ class LoupedeckSerialConnection(Connection):
             product = info.pid
             manufacturer = info.manufacturer
             if vendor in VENDOR_IDS or manufacturer in MANUFACTURERS:
-                results.append({
-                    'connectionType': cls,
-                    'path': info.device,
-                    'vendorId': vendor,
-                    'productId': product,
-                    'serialNumber': info.serial_number,
-                })
+                results.append(
+                    {
+                        "connectionType": cls,
+                        "path": info.device,
+                        "vendorId": vendor,
+                        "productId": product,
+                        "serialNumber": info.serial_number,
+                    }
+                )
         return results
 
     def close(self):
@@ -57,17 +59,17 @@ class LoupedeckSerialConnection(Connection):
         self.connection = None
 
         # Emit disconnect event
-        self.emit('disconnect', None)
+        self.emit("disconnect", None)
 
     def connect(self):
         if not self.path:
-            raise ValueError('path is required')
+            raise ValueError("path is required")
         self.connection = serial.Serial(self.path, 256000, timeout=1)
         self.connection.write(WS_UPGRADE_HEADER)
         response = self.connection.readline()
         if not response.startswith(WS_UPGRADE_RESPONSE):
-            raise RuntimeError(f'Invalid handshake response: {response!r}')
-        self.emit('connect', {'address': self.path})
+            raise RuntimeError(f"Invalid handshake response: {response!r}")
+        self.emit("connect", {"address": self.path})
 
     def is_ready(self):
         return self.connection is not None and self.connection.is_open
@@ -78,17 +80,17 @@ class LoupedeckSerialConnection(Connection):
         data = self.connection.read(self.connection.in_waiting or 1)
         packets = self.parser.feed(data)
         for pkt in packets:
-            self.emit('message', pkt)
+            self.emit("message", pkt)
 
     def send(self, buff: bytes, raw: bool = False):
         if not self.connection:
             return
         if not raw:
-            if len(buff) > 0xff:
+            if len(buff) > 0xFF:
                 prep = bytearray(14)
                 prep[0] = 0x82
-                prep[1] = 0xff
-                prep[6:10] = len(buff).to_bytes(4, 'big')
+                prep[1] = 0xFF
+                prep[6:10] = len(buff).to_bytes(4, "big")
             else:
                 prep = bytearray(6)
                 prep[0] = 0x82
