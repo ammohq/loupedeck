@@ -22,6 +22,15 @@ class LoupedeckDevice(EventEmitter):
             devices.extend(LoupedeckWSConnection.discover())
         return devices
 
+    def __enter__(self):
+        """Context manager entry point."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit point, ensures device is properly closed."""
+        self.close()
+        return False
+
     def __init__(self, host: str | None = None, path: str | None = None,
                  auto_connect: bool = True, reconnect_interval: int | None = DEFAULT_RECONNECT_INTERVAL):
         super().__init__()
@@ -31,6 +40,14 @@ class LoupedeckDevice(EventEmitter):
         self.transaction_id = 0
         self.connection = None
         self.pending_transactions: dict[int, callable] = {}
+        self._reconnect_task = None
+        self._should_reconnect = reconnect_interval is not None
+
+        # Initialize event handler references
+        self._connect_handler = None
+        self._message_handler = None
+        self._disconnect_handler = None
+
         self.handlers = {
             COMMANDS['BUTTON_PRESS']: self.on_button,
             COMMANDS['KNOB_ROTATE']: self.on_rotate,
@@ -40,6 +57,31 @@ class LoupedeckDevice(EventEmitter):
                 self.connect()
             except Exception:
                 pass
+
+    def _handle_disconnect(self, data):
+        """Handle disconnect event and attempt reconnection if enabled."""
+        self.emit('disconnect', data)
+        if self._should_reconnect and self.reconnect_interval:
+            self._schedule_reconnect()
+
+    def _schedule_reconnect(self):
+        """Schedule a reconnection attempt."""
+        if self._reconnect_task is not None:
+            return
+
+        async def reconnect_task():
+            await asyncio.sleep(self.reconnect_interval / 1000)
+            self._reconnect_task = None
+            try:
+                self.connect()
+                self.emit('reconnect', None)
+            except Exception as e:
+                self.emit('reconnect_error', {'error': str(e)})
+                self._schedule_reconnect()
+
+        self.emit('reconnect_attempt', None)
+        loop = asyncio.get_event_loop()
+        self._reconnect_task = loop.create_task(reconnect_task())
 
     def connect(self):
         if self.path:
@@ -60,19 +102,46 @@ class LoupedeckDevice(EventEmitter):
                 asyncio.get_event_loop().run_until_complete(self.connection.connect())
             else:
                 self.connection.connect()
-        self.connection.on('connect', self.emit.bind(self, 'connect'))
-        self.connection.on('message', self.on_receive)
-        self.connection.on('disconnect', self.emit.bind(self, 'disconnect'))
+
+        # Store event handler references for later cleanup
+        self._connect_handler = self.emit.bind(self, 'connect')
+        self._message_handler = self.on_receive
+        self._disconnect_handler = self._handle_disconnect
+
+        # Attach event handlers
+        self.connection.on('connect', self._connect_handler)
+        self.connection.on('message', self._message_handler)
+        self.connection.on('disconnect', self._disconnect_handler)
         return self
 
     def close(self):
+        # Cancel any pending reconnection task
+        if self._reconnect_task is not None:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
+
+        # Disable automatic reconnection
+        self._should_reconnect = False
+
         if self.connection:
+            # Remove event listeners to prevent memory leaks
+            if hasattr(self, '_connect_handler'):
+                self.connection.off('connect', self._connect_handler)
+            if hasattr(self, '_message_handler'):
+                self.connection.off('message', self._message_handler)
+            if hasattr(self, '_disconnect_handler'):
+                self.connection.off('disconnect', self._disconnect_handler)
+
+            # Close the connection
             if hasattr(self.connection, 'close'):
                 if asyncio.iscoroutinefunction(self.connection.close):
                     import asyncio
                     asyncio.get_event_loop().run_until_complete(self.connection.close())
                 else:
                     self.connection.close()
+
+            # Clear connection reference
+            self.connection = None
 
     # Simplified drawing and command helpers
     def send(self, command: int, data: bytes = b""):
@@ -234,4 +303,3 @@ class RazerStreamControllerX(LoupedeckDevice):
 
     def vibrate(self, *args, **kwargs):
         raise RuntimeError('Vibration not available on this device!')
-

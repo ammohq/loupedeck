@@ -1,7 +1,7 @@
 import serial
 from serial.tools import list_ports
 from ..parser import MagicByteLengthParser
-from ..eventemitter import EventEmitter
+from . import Connection
 
 WS_UPGRADE_HEADER = b"GET /index.html\r\nHTTP/1.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: 123abc\r\n\r\n"
 WS_UPGRADE_RESPONSE = b"HTTP/1.1"
@@ -11,11 +11,12 @@ VENDOR_IDS = [0x2ec2, 0x1532]
 MANUFACTURERS = ["Loupedeck", "Razer"]
 
 
-class LoupedeckSerialConnection(EventEmitter):
+class LoupedeckSerialConnection(Connection):
+    """Serial connection to a Loupedeck device."""
+
     def __init__(self, path: str | None = None):
         super().__init__()
         self.path = path
-        self.connection = None
         self.parser = MagicByteLengthParser(0x82)
 
     @classmethod
@@ -38,8 +39,24 @@ class LoupedeckSerialConnection(EventEmitter):
     def close(self):
         if not self.connection:
             return
-        self.send(WS_CLOSE_FRAME, raw=True)
-        self.connection.close()
+
+        try:
+            # Send WebSocket close frame
+            self.send(WS_CLOSE_FRAME, raw=True)
+
+            # Close the serial connection
+            self.connection.close()
+        except Exception:
+            # Ignore errors during cleanup
+            pass
+
+        # Reset the parser
+        self.parser = MagicByteLengthParser(0x82)
+
+        # Clear connection reference
+        self.connection = None
+
+        # Emit disconnect event
         self.emit('disconnect', None)
 
     def connect(self):
@@ -78,4 +95,3 @@ class LoupedeckSerialConnection(EventEmitter):
                 prep[1] = 0x80 + len(buff)
             self.connection.write(prep)
         self.connection.write(buff)
-

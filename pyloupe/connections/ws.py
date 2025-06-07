@@ -1,7 +1,7 @@
 import asyncio
 import websockets
 from ..constants import CONNECTION_TIMEOUT
-from ..eventemitter import EventEmitter
+from . import Connection
 
 DISCONNECT_CODES = {
     'NORMAL': 1000,
@@ -9,11 +9,12 @@ DISCONNECT_CODES = {
 }
 
 
-class LoupedeckWSConnection(EventEmitter):
+class LoupedeckWSConnection(Connection):
+    """WebSocket connection to a Loupedeck device."""
+
     def __init__(self, host: str | None = None):
         super().__init__()
         self.host = host
-        self.connection = None
         self.last_tick = None
         self.connection_timeout = CONNECTION_TIMEOUT
         self._keepalive_task = None
@@ -33,8 +34,27 @@ class LoupedeckWSConnection(EventEmitter):
         self.emit('connect', {'address': self.address})
 
     async def close(self):
+        # Cancel the keepalive task if it exists
+        if self._keepalive_task is not None:
+            self._keepalive_task.cancel()
+            self._keepalive_task = None
+
         if self.connection:
-            await self.connection.close()
+            try:
+                # Close the WebSocket connection
+                await self.connection.close()
+            except Exception:
+                # Ignore errors during cleanup
+                pass
+
+            # Clear connection reference
+            self.connection = None
+
+        # Reset last tick
+        self.last_tick = None
+
+        # Emit disconnect event
+        self.emit('disconnect', None)
 
     def is_ready(self):
         return self.connection and not self.connection.closed
@@ -53,4 +73,3 @@ class LoupedeckWSConnection(EventEmitter):
 
     async def send(self, data: bytes):
         await self.connection.send(data)
-
