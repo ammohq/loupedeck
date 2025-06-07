@@ -17,6 +17,13 @@ from .parser import MagicByteLengthParser
 from .connections.serial import LoupedeckSerialConnection
 from .connections.ws import LoupedeckWSConnection
 from .logger import get_logger
+from .exceptions import (
+    DeviceNotFoundError,
+    ConnectionError,
+    CommandError,
+    ValidationError,
+    UnsupportedFeatureError,
+)
 
 
 class LoupedeckDevice(EventEmitter):
@@ -138,7 +145,7 @@ class LoupedeckDevice(EventEmitter):
             devices = self.list()
             if not devices:
                 self.logger.error("No devices found")
-                raise RuntimeError("No devices found")
+                raise DeviceNotFoundError("No devices found during auto-discovery")
             device = devices[0]
             conn_type = device["connectionType"]
             args = {k: v for k, v in device.items() if k != "connectionType"}
@@ -209,7 +216,7 @@ class LoupedeckDevice(EventEmitter):
     def send(self, command: int, data: bytes = b""):
         if not self.connection or not self.connection.is_ready():
             self.logger.warning("Cannot send command: connection not ready")
-            return
+            raise CommandError("Cannot send command: device connection is not ready")
 
         self.transaction_id = (self.transaction_id + 1) % 256 or 1
         header = struct.pack(
@@ -274,7 +281,8 @@ class LoupedeckDevice(EventEmitter):
     def set_button_color(self, id: str, color: str):
         key = next((k for k, v in BUTTONS.items() if v == id), None)
         if key is None:
-            raise ValueError(f"Invalid button ID: {id}")
+            self.logger.error("Invalid button ID: %s", id)
+            raise ValidationError(f"Invalid button ID: {id}")
         from .color import parse_color
 
         r, g, b, _ = parse_color(color)
@@ -292,10 +300,11 @@ class LoupedeckDevice(EventEmitter):
             y (int): The y-coordinate offset
 
         Raises:
-            ValueError: If the screen is invalid or the image is incompatible
+            ValidationError: If the screen is invalid or the image is incompatible
         """
         if not hasattr(self, "displays") or screen not in self.displays:
-            raise ValueError(f"Invalid screen: {screen}")
+            self.logger.error("Invalid screen: %s", screen)
+            raise ValidationError(f"Invalid screen: {screen}")
 
         # Get screen dimensions
         screen_info = self.displays[screen]
@@ -497,7 +506,7 @@ class RazerStreamControllerX(LoupedeckDevice):
         )
 
     def set_button_color(self, *args, **kwargs):
-        raise RuntimeError("Setting key color not available on this device!")
+        raise UnsupportedFeatureError("Setting key color", self.type)
 
     def vibrate(self, *args, **kwargs):
-        raise RuntimeError("Vibration not available on this device!")
+        raise UnsupportedFeatureError("Vibration", self.type)
