@@ -24,8 +24,8 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 [x] 12. Add type hints to all functions and methods
 [ ] 13. Set up static type checking with mypy
 [ ] 14. Implement proper error handling throughout the codebase
-[ ] 15. Add logging throughout the codebase
-[ ] 16. Set up linting with flake8 or pylint
+[x] 15. Add logging throughout the codebase
+[x] 16. Set up linting with flake8 or pylint
 [x] 17. Refactor the EventEmitter class to support removing event listeners
 [x] 18. Create a base Connection class that both WebSocket and Serial connections inherit from
 [ ] 19. Implement proper connection pooling for multiple devices
@@ -62,7 +62,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 [ ] 38. Add a CODE_OF_CONDUCT.md file
 [ ] 39. Set up issue templates for bug reports and feature requests
 [ ] 40. Create a pull request template
-[ ] 41. Add a LICENSE file
+[x] 41. Add a LICENSE file
 
 ## Security
 

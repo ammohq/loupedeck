@@ -131,6 +131,14 @@ with LoupedeckDevice() as device:
 # Device is automatically closed when exiting the context
 ```
 
+### Example Scripts
+
+Additional examples are available in the `pyloupe/examples` directory. These
+mirror the JavaScript demos provided in the root of the repository:
+
+* `simple_example.py` – basic device usage and button color cycling.
+* `slide_puzzle.py` – a small sliding puzzle game controlled with the knobs.
+
 ## Supported Devices
 
 - Loupedeck Live
