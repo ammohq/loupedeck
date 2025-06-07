@@ -1,6 +1,8 @@
 from __future__ import annotations
 import struct
 import asyncio
+from typing import Union, Literal, Optional
+from PIL import Image
 
 from .constants import BUTTONS, COMMANDS, DEFAULT_RECONNECT_INTERVAL, HAPTIC, MAX_BRIGHTNESS
 from .eventemitter import EventEmitter
@@ -169,6 +171,59 @@ class LoupedeckDevice(EventEmitter):
         from .color import parse_color
         r, g, b, _ = parse_color(color)
         self.send(COMMANDS['SET_COLOR'], bytes([key, r, g, b]))
+
+    def display_image(self, image: Image.Image, screen: str = 'center', x: int = 0, y: int = 0):
+        """Display an image on the device screen.
+
+        Args:
+            image (PIL.Image.Image): The image to display
+            screen (str): The target screen ('center', 'left', 'right', 'knob')
+            x (int): The x-coordinate offset
+            y (int): The y-coordinate offset
+
+        Raises:
+            ValueError: If the screen is invalid or the image is incompatible
+        """
+        if not hasattr(self, 'displays') or screen not in self.displays:
+            raise ValueError(f"Invalid screen: {screen}")
+
+        # Get screen dimensions
+        screen_info = self.displays[screen]
+        screen_width = screen_info['width']
+        screen_height = screen_info['height']
+
+        # Ensure image is in RGB mode
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        # Resize image if it doesn't match the screen dimensions
+        if image.width != screen_width or image.height != screen_height:
+            image = image.resize((screen_width, screen_height))
+
+        # Convert image to RGBA bytes
+        rgba_data = bytearray()
+        pixels = image.load()
+        for y_pos in range(image.height):
+            for x_pos in range(image.width):
+                r, g, b = pixels[x_pos, y_pos]
+                rgba_data.extend([r, g, b, 255])  # Add alpha channel
+
+        # Convert RGBA to RGB565
+        rgb565_data = rgba2rgb565(rgba_data, image.width * image.height)
+
+        # Prepare the frame buffer command
+        screen_id = screen_info['id']
+
+        # Create header with screen ID, x, y, width, height
+        header = bytearray()
+        header.extend(screen_id)
+        header.extend(struct.pack('<HH', x, y))
+        header.extend(struct.pack('<HH', image.width, image.height))
+
+        # Send the frame buffer command with the image data
+        self.send(COMMANDS['FRAMEBUFF'], header + rgb565_data)
+
+        return True
 
     # Event handlers
     def on_button(self, data: bytes):
