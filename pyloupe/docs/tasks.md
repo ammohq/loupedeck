@@ -12,9 +12,9 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 
 ## Testing
 
-[ ] 6. Set up a testing framework (pytest recommended)
-[ ] 7. Create unit tests for utility functions (color.py, util.py)
-[ ] 8. Create unit tests for the parser (parser.py)
+[x] 6. Set up a testing framework (pytest recommended)
+[x] 7. Create unit tests for utility functions (color.py, util.py)
+[x] 8. Create unit tests for the parser (parser.py)
 [ ] 9. Create mock objects for device connections to enable testing without physical devices
 [ ] 10. Implement integration tests for device communication
 [ ] 11. Set up continuous integration (CI) using GitHub Actions or similar
@@ -38,7 +38,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 [x] 23. Add support for displaying images on the device screens
 [x] 24. Create a context manager for device connections
 [x] 25. Implement automatic reconnection for lost connections
-[ ] 26. Add support for device firmware updates
+[x] 26. Add support for device firmware updates
 
 ## Performance and Reliability
 
@@ -58,8 +58,8 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 
 ## Community and Contribution
 
-[ ] 37. Create CONTRIBUTING.md with guidelines for contributors
-[ ] 38. Add a CODE_OF_CONDUCT.md file
+[x] 37. Create CONTRIBUTING.md with guidelines for contributors
+[x] 38. Add a CODE_OF_CONDUCT.md file
 [ ] 39. Set up issue templates for bug reports and feature requests
 [ ] 40. Create a pull request template
 [x] 41. Add a LICENSE file

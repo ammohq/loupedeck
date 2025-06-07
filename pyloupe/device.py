@@ -335,6 +335,28 @@ class LoupedeckDevice(EventEmitter):
 
         return True
 
+    def update_firmware(self, firmware_path: str, chunk_size: int = 4096):
+        """Update device firmware from a binary file.
+
+        The firmware is sent in chunks using the ``FIRMWARE_UPDATE`` command.
+
+        Args:
+            firmware_path: Path to the firmware binary file.
+            chunk_size: Size of each data chunk to send.
+        """
+        self.logger.info("Updating firmware using %s", firmware_path)
+
+        with open(firmware_path, "rb") as fw:
+            offset = 0
+            chunk = fw.read(chunk_size)
+            while chunk:
+                header = struct.pack("<I", offset)
+                self.send(COMMANDS["FIRMWARE_UPDATE"], header + chunk)
+                offset += len(chunk)
+                chunk = fw.read(chunk_size)
+
+        self.logger.info("Firmware update data sent")
+
     # Event handlers
     def on_button(self, data: bytes):
         if len(data) < 2:
