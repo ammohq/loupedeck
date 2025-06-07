@@ -1,0 +1,61 @@
+buttons:
+  1:
+    label: "Brave"
+    action: "Brave Browser"
+    icon: "icons/brave-browser-icon.png"
+  2:
+    label: "Telegram"
+    action: "Telegram"
+    icon: "icons/telegram.512x512.png"
+  3:
+    label: "Slack"
+    action: "Slack"
+    icon: "icons/slack-icon.512x511.png"
+  4:
+    label: "Mail"
+    action: "Mail"
+    icon: "icons/icons8-email-96.png"
+  5:
+    label: "VSCode"
+    action: "Visual Studio Code"
+    icon: ""
+  6:
+    label: "PyCharm"
+    action: "PyCharm"
+    icon: "icons/pycharm.512x512.png"
+  7:
+    label: "GitKraken"
+    action: "GitKraken"
+    icon: "icons/gitkraken.512x506.png"
+  8:
+    label: "Terminal"
+    action: "Terminal"
+    icon: "icons/utilities-terminal.505x512.png"
+  9:
+    label: "pgAdmin 4"
+    action: "pgAdmin 4"
+    icon: "icons/postgres.png"
+  10:
+    label: "Bambu"
+    action: "Bambu Studio"
+    icon: ""
+  11:
+    label: "Backend"
+    action: "http://localhost:8000"
+    icon: ""
+  12:
+    label: "Frontend"
+    action: "http://localhost:4200"
+    icon: ""
+  13:
+    label: "Kubernetes"
+    action: "Kubernetes Dashboard"
+    icon: ""
+  14:
+    label: "Poopdeck"
+    action: "Poopdeck"
+    icon: ""
+  15:
+    label: "K9s"
+    action: "K9s"
+    icon: ""

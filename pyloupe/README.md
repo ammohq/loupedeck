@@ -176,6 +176,14 @@ mirror the JavaScript demos provided in the root of the repository:
 
 For more detailed documentation and examples, see the [examples](examples/) directory.
 
+### Button Mapping with YAML Configuration
+
+PyLoupe supports using YAML configuration files for button mappings. This allows you to define button layouts, actions, and appearances in a structured and maintainable way.
+
+For detailed instructions and examples, see:
+- [Button Mapping Documentation](docs/button_mapping.md) - Comprehensive guide on using YAML configuration
+- [YAML Config Example](examples/yaml_config_example.py) - Working example script that loads button configurations from a YAML file
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
