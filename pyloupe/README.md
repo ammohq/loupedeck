@@ -15,8 +15,32 @@ PyLoupe is a Python library for controlling Loupedeck devices. It provides a sim
 
 ## Installation
 
+### From PyPI (Recommended)
+
 ```bash
 pip install pyloupe
+```
+
+### From Source
+
+```bash
+# Clone the repository
+git clone https://github.com/foxxyz/pyloupe.git
+cd pyloupe
+
+# Install the package
+pip install .
+```
+
+### Development Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/foxxyz/pyloupe.git
+cd pyloupe
+
+# Install development dependencies
+pip install -e ".[dev]"
 ```
 
 ## Requirements
@@ -124,11 +148,11 @@ with LoupedeckDevice() as device:
     # Display an image on the center screen
     image = Image.open("example.png")
     device.display_image(image, screen="center")
-    
+
     # Wait for 5 seconds
     import time
     time.sleep(5)
-    
+
 # Device is automatically closed when exiting the context
 ```
 

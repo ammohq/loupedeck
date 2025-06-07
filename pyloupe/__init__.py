@@ -13,6 +13,8 @@ from .device import (
 from .constants import HAPTIC
 from .discovery import discover
 
+__version__ = "0.1.0"
+
 __all__ = [
     "LoupedeckDevice",
     "LoupedeckLive",
@@ -22,4 +24,5 @@ __all__ = [
     "RazerStreamControllerX",
     "HAPTIC",
     "discover",
+    "__version__",
 ]
