@@ -33,7 +33,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 ## Features
 
 [x] 20. Implement network scanning for WebSocket devices
-[ ] 21. Add support for custom button mapping
+[x] 21. Add support for custom button mapping
 [ ] 22. Implement a higher-level API for common operations
 [x] 23. Add support for displaying images on the device screens
 [x] 24. Create a context manager for device connections

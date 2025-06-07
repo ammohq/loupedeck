@@ -56,6 +56,9 @@ class LoupedeckDevice(EventEmitter):
         self._reconnect_task = None
         self._should_reconnect = reconnect_interval is not None
 
+        # Custom button mapping dictionary
+        self.button_mapping = {}
+
         # Initialize event handler references
         self._connect_handler = None
         self._message_handler = None
@@ -182,6 +185,40 @@ class LoupedeckDevice(EventEmitter):
         byte = max(0, min(MAX_BRIGHTNESS, round(value * MAX_BRIGHTNESS)))
         self.send(COMMANDS["SET_BRIGHTNESS"], bytes([byte]))
 
+    def set_button_mapping(self, hw_button_id: int, custom_id: str | int):
+        """Set a custom mapping for a button.
+
+        Args:
+            hw_button_id (int): The hardware button ID (in decimal or hex)
+            custom_id (str | int): The custom ID to map the button to
+        """
+        self.button_mapping[hw_button_id] = custom_id
+
+    def get_button_mapping(self, hw_button_id: int) -> str | int | None:
+        """Get the current mapping for a button.
+
+        Args:
+            hw_button_id (int): The hardware button ID (in decimal or hex)
+
+        Returns:
+            str | int | None: The current mapping for the button, or None if not mapped
+        """
+        if hw_button_id in self.button_mapping:
+            return self.button_mapping[hw_button_id]
+        return BUTTONS.get(hw_button_id)
+
+    def reset_button_mapping(self, hw_button_id: int = None):
+        """Reset button mappings.
+
+        Args:
+            hw_button_id (int, optional): The hardware button ID to reset.
+                                         If None, all mappings are reset.
+        """
+        if hw_button_id is None:
+            self.button_mapping = {}
+        elif hw_button_id in self.button_mapping:
+            del self.button_mapping[hw_button_id]
+
     def set_button_color(self, id: str, color: str):
         key = next((k for k, v in BUTTONS.items() if v == id), None)
         if key is None:
@@ -250,7 +287,13 @@ class LoupedeckDevice(EventEmitter):
     def on_button(self, data: bytes):
         if len(data) < 2:
             return
-        button_id = BUTTONS.get(data[0])
+        # Get the hardware button ID
+        hw_button_id = data[0]
+        # Check if there's a custom mapping for this button
+        if hw_button_id in self.button_mapping:
+            button_id = self.button_mapping[hw_button_id]
+        else:
+            button_id = BUTTONS.get(hw_button_id)
         event = "down" if data[1] == 0x00 else "up"
         self.emit(event, {"id": button_id})
 
