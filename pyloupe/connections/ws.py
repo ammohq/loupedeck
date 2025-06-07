@@ -1,3 +1,5 @@
+"""WebSocket connection handling for Loupedeck devices."""
+
 import asyncio
 import socket
 import ipaddress
@@ -22,17 +24,31 @@ class LoupedeckWSConnection(Connection):
     logger = get_logger("connection.ws")
 
     def __init__(
-        self, 
-        host: str | None = None, 
+        self,
+        host: str | None = None,
         connection_timeout: int = CONNECTION_TIMEOUT,
         connect_timeout: float = 5.0,
         max_retries: int = 3,
         retry_delay: float = 1.0
     ):
+        """Create a WebSocket connection instance.
+
+        Args:
+            host: Device host name or IP address.
+            connection_timeout: Keepalive timeout in milliseconds.
+            connect_timeout: Timeout for the initial connection attempt.
+            max_retries: Number of retry attempts.
+            retry_delay: Delay between retries in seconds.
+        """
+
         super().__init__()
         self.logger.debug(
             "Initializing WebSocket connection (host=%s, connection_timeout=%s, connect_timeout=%s, max_retries=%s, retry_delay=%s)",
-            host, connection_timeout, connect_timeout, max_retries, retry_delay
+            host,
+            connection_timeout,
+            connect_timeout,
+            max_retries,
+            retry_delay,
         )
         self.host = host
         self.last_tick = None
@@ -190,6 +206,7 @@ class LoupedeckWSConnection(Connection):
             return None
 
     async def connect(self):
+        """Establish the WebSocket connection with retry logic."""
         self.logger.info("Connecting to WebSocket server")
         if not self.host:
             self.logger.error("Cannot connect: host is required")
@@ -240,6 +257,7 @@ class LoupedeckWSConnection(Connection):
                 raise ConnectionError(f"Failed to connect to {self.address}: {str(last_error)}")
 
     async def close(self):
+        """Close the WebSocket connection and cleanup tasks."""
         self.logger.info("Closing WebSocket connection")
 
         # Cancel the keepalive task if it exists
@@ -271,11 +289,13 @@ class LoupedeckWSConnection(Connection):
         self.logger.info("Disconnected")
 
     def is_ready(self):
+        """Return ``True`` if the WebSocket is open."""
         is_ready = self.connection and not self.connection.closed
         self.logger.debug("Connection ready: %s", is_ready)
         return is_ready
 
     async def _check_connected(self):
+        """Monitor the connection and close on timeout."""
         self.logger.debug("Starting connection keepalive check")
         while self.is_ready():
             await asyncio.sleep(self.connection_timeout / 1000)
@@ -290,6 +310,7 @@ class LoupedeckWSConnection(Connection):
         self.logger.debug("Keepalive check ended")
 
     async def read(self):
+        """Read messages from the WebSocket and emit events."""
         self.logger.debug("Starting to read messages")
         try:
             async for message in self.connection:
@@ -303,6 +324,7 @@ class LoupedeckWSConnection(Connection):
             self.logger.debug("Stopped reading messages")
 
     async def send(self, data: bytes):
+        """Send raw bytes to the WebSocket."""
         if not self.is_ready():
             self.logger.warning("Cannot send data: connection not ready")
             return

@@ -1,3 +1,5 @@
+"""Convenience imports for the PyLoupe package."""
+
 from .device import (
     LoupedeckDevice,
 )

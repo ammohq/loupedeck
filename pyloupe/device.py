@@ -1,6 +1,9 @@
+"""Classes representing Loupedeck devices and common functionality."""
+
 from __future__ import annotations
 import struct
 import asyncio
+import time
 from typing import Union, Literal, Optional
 from PIL import Image
 
@@ -8,6 +11,7 @@ from .constants import (
     BUTTONS,
     COMMANDS,
     DEFAULT_RECONNECT_INTERVAL,
+    DEFAULT_COMMAND_INTERVAL,
     HAPTIC,
     MAX_BRIGHTNESS,
 )
@@ -63,10 +67,30 @@ class LoupedeckDevice(EventEmitter):
         path: str | None = None,
         auto_connect: bool = True,
         reconnect_interval: int | None = DEFAULT_RECONNECT_INTERVAL,
+        command_interval: int = DEFAULT_COMMAND_INTERVAL,
     ):
+        """Create a new device instance.
+
+        Args:
+            host: Optional hostname for a WebSocket connection.
+            path: Optional serial path for a USB connection.
+            auto_connect: If ``True`` the device will attempt to connect
+                immediately.
+            reconnect_interval: Interval in milliseconds between reconnection
+                attempts. ``None`` disables automatic reconnect.
+            command_interval: Minimum delay in milliseconds between commands to
+                avoid overloading the device.
+        """
+
         super().__init__()
-        self.logger.debug("Initializing LoupedeckDevice (host=%s, path=%s, auto_connect=%s, reconnect_interval=%s)",
-                         host, path, auto_connect, reconnect_interval)
+        self.logger.debug(
+            "Initializing LoupedeckDevice (host=%s, path=%s, auto_connect=%s, reconnect_interval=%s, command_interval=%s)",
+            host,
+            path,
+            auto_connect,
+            reconnect_interval,
+            command_interval,
+        )
 
         self.host = host
         self.path = path
@@ -76,6 +100,8 @@ class LoupedeckDevice(EventEmitter):
         self.pending_transactions: dict[int, callable] = {}
         self._reconnect_task = None
         self._should_reconnect = reconnect_interval is not None
+        self.command_interval = command_interval / 1000.0
+        self._last_command_time = 0.0
 
         # Custom button mapping dictionary
         self.button_mapping = {}
@@ -132,6 +158,7 @@ class LoupedeckDevice(EventEmitter):
         self._reconnect_task = loop.create_task(reconnect_task())
 
     def connect(self):
+        """Establish a connection to the first available device."""
         self.logger.info("Connecting to device")
 
         if self.path:
@@ -175,6 +202,7 @@ class LoupedeckDevice(EventEmitter):
         return self
 
     def close(self):
+        """Close the device connection and cleanup resources."""
         self.logger.info("Closing device connection")
 
         # Cancel any pending reconnection task
@@ -212,9 +240,28 @@ class LoupedeckDevice(EventEmitter):
 
     # Simplified drawing and command helpers
     def send(self, command: int, data: bytes = b""):
+        """Send a command to the device with optional rate limiting.
+
+        Args:
+            command: Command identifier byte.
+            data: Optional payload for the command.
+
+        Returns:
+            int: The transaction ID used for the command.
+
+        Raises:
+            CommandError: If the device is not connected.
+        """
         if not self.connection or not self.connection.is_ready():
             self.logger.warning("Cannot send command: connection not ready")
             raise CommandError("Cannot send command: device connection is not ready")
+
+        now = time.monotonic()
+        elapsed = now - self._last_command_time
+        if elapsed < self.command_interval:
+            sleep_time = self.command_interval - elapsed
+            self.logger.debug("Rate limiting active; sleeping %.3f seconds", sleep_time)
+            time.sleep(sleep_time)
 
         self.transaction_id = (self.transaction_id + 1) % 256 or 1
         header = struct.pack(
@@ -234,10 +281,17 @@ class LoupedeckDevice(EventEmitter):
             else:
                 self.connection.send(packet)
 
+        self._last_command_time = time.monotonic()
+
         self.logger.debug("Command sent successfully")
         return self.transaction_id
 
     def set_brightness(self, value: float):
+        """Set the device screen brightness.
+
+        Args:
+            value: Brightness value from 0.0 to 1.0.
+        """
         byte = max(0, min(MAX_BRIGHTNESS, round(value * MAX_BRIGHTNESS)))
         self.send(COMMANDS["SET_BRIGHTNESS"], bytes([byte]))
 
@@ -276,6 +330,12 @@ class LoupedeckDevice(EventEmitter):
             del self.button_mapping[hw_button_id]
 
     def set_button_color(self, id: str, color: str):
+        """Change the color of a button LED.
+
+        Args:
+            id: Logical button identifier.
+            color: Color string in hex format (``"#RRGGBB"``).
+        """
         key = next((k for k, v in BUTTONS.items() if v == id), None)
         if key is None:
             self.logger.error("Invalid button ID: %s", id)
@@ -365,6 +425,7 @@ class LoupedeckDevice(EventEmitter):
 
     # Event handlers
     def on_button(self, data: bytes):
+        """Handle button press/release events."""
         if len(data) < 2:
             return
         # Get the hardware button ID
@@ -378,6 +439,7 @@ class LoupedeckDevice(EventEmitter):
         self.emit(event, {"id": button_id})
 
     def on_rotate(self, data: bytes):
+        """Handle knob rotation events."""
         if len(data) < 2:
             return
         knob = BUTTONS.get(data[0])
@@ -385,6 +447,7 @@ class LoupedeckDevice(EventEmitter):
         self.emit("rotate", {"id": knob, "delta": delta})
 
     def on_receive(self, data: bytes):
+        """Dispatch incoming messages to the appropriate handler."""
         if not data:
             return
         msg_length = data[0]
@@ -415,6 +478,7 @@ class LoupedeckLive(LoupedeckDevice):
     }
 
     def get_target(self, x, y, _id=None):
+        """Return screen/key info for a coordinate pair."""
         if x < self.displays["left"]["width"]:
             return {"screen": "left"}
         if x >= self.displays["left"]["width"] + self.displays["center"]["width"]:
@@ -458,6 +522,7 @@ class LoupedeckCT(LoupedeckLive):
     type = "Loupedeck CT"
 
     def get_target(self, x, y, id=None):
+        """Return screen info, including knob screen when ``id`` is 0."""
         if id == 0:
             return {"screen": "knob"}
         return super().get_target(x, y)
@@ -477,6 +542,7 @@ class LoupedeckLiveS(LoupedeckDevice):
     }
 
     def get_target(self, x, y, _id=None):
+        """Return key coordinates for Live S."""
         if x < self.visibleX[0] or x >= self.visibleX[1]:
             return {}
         column = int((x - self.visibleX[0]) / self.key_size)
@@ -505,6 +571,7 @@ class RazerStreamControllerX(LoupedeckDevice):
     }
 
     def on_button(self, data: bytes):
+        """Emit additional touch events for the Razer controller."""
         super().on_button(data)
         event = "touchstart" if data[1] == 0x00 else "touchend"
         key = BUTTONS.get(data[0])
@@ -525,7 +592,9 @@ class RazerStreamControllerX(LoupedeckDevice):
         )
 
     def set_button_color(self, *args, **kwargs):
+        """Unsupported on this device."""
         raise UnsupportedFeatureError("Setting key color", self.type)
 
     def vibrate(self, *args, **kwargs):
+        """Unsupported on this device."""
         raise UnsupportedFeatureError("Vibration", self.type)
