@@ -21,7 +21,7 @@ This document contains a list of actionable improvement tasks for the PyLoupe pr
 
 ## Code Quality and Structure
 
-[ ] 12. Add type hints to all functions and methods
+[x] 12. Add type hints to all functions and methods
 [ ] 13. Set up static type checking with mypy
 [ ] 14. Implement proper error handling throughout the codebase
 [ ] 15. Add logging throughout the codebase
