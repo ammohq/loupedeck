@@ -11,6 +11,7 @@ PyLoupe is a Python library for controlling Loupedeck devices. It provides a sim
 - Set button colors and device brightness
 - Custom button mapping
 - High-level API for common operations
+- Update device firmware from a binary file
 
 ## Installation
 

@@ -155,14 +155,13 @@ class LoupedeckDevice(EventEmitter):
         if hasattr(self.connection, "connect"):
             self.logger.debug("Establishing connection")
             if asyncio.iscoroutinefunction(self.connection.connect):
-                import asyncio
                 self.logger.debug("Using asyncio for connection")
                 asyncio.get_event_loop().run_until_complete(self.connection.connect())
             else:
                 self.connection.connect()
 
         # Store event handler references for later cleanup
-        self._connect_handler = self.emit.bind(self, "connect")
+        self._connect_handler = lambda data: self.emit("connect", data)
         self._message_handler = self.on_receive
         self._disconnect_handler = self._handle_disconnect
 
@@ -202,7 +201,6 @@ class LoupedeckDevice(EventEmitter):
             if hasattr(self.connection, "close"):
                 self.logger.debug("Closing connection")
                 if asyncio.iscoroutinefunction(self.connection.close):
-                    import asyncio
                     self.logger.debug("Using asyncio for closing connection")
                     asyncio.get_event_loop().run_until_complete(self.connection.close())
                 else:
@@ -229,7 +227,6 @@ class LoupedeckDevice(EventEmitter):
 
         if hasattr(self.connection, "send"):
             if asyncio.iscoroutinefunction(self.connection.send):
-                import asyncio
                 self.logger.debug("Using asyncio for sending data")
                 asyncio.get_event_loop().run_until_complete(
                     self.connection.send(packet)
@@ -343,6 +340,28 @@ class LoupedeckDevice(EventEmitter):
         self.send(COMMANDS["FRAMEBUFF"], header + rgb565_data)
 
         return True
+
+    def update_firmware(self, firmware_path: str, chunk_size: int = 4096):
+        """Update device firmware from a binary file.
+
+        The firmware is sent in chunks using the ``FIRMWARE_UPDATE`` command.
+
+        Args:
+            firmware_path: Path to the firmware binary file.
+            chunk_size: Size of each data chunk to send.
+        """
+        self.logger.info("Updating firmware using %s", firmware_path)
+
+        with open(firmware_path, "rb") as fw:
+            offset = 0
+            chunk = fw.read(chunk_size)
+            while chunk:
+                header = struct.pack("<I", offset)
+                self.send(COMMANDS["FIRMWARE_UPDATE"], header + chunk)
+                offset += len(chunk)
+                chunk = fw.read(chunk_size)
+
+        self.logger.info("Firmware update data sent")
 
     # Event handlers
     def on_button(self, data: bytes):
