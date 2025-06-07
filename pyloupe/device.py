@@ -16,18 +16,29 @@ from .util import rgba2rgb565
 from .parser import MagicByteLengthParser
 from .connections.serial import LoupedeckSerialConnection
 from .connections.ws import LoupedeckWSConnection
+from .logger import get_logger
 
 
 class LoupedeckDevice(EventEmitter):
     key_size = 90
 
+    # Class logger
+    logger = get_logger("device")
+
     @staticmethod
     def list(ignore_serial: bool = False, ignore_websocket: bool = False):
+        LoupedeckDevice.logger.debug("Listing available devices (serial=%s, websocket=%s)", 
+                                    not ignore_serial, not ignore_websocket)
         devices = []
         if not ignore_serial:
-            devices.extend(LoupedeckSerialConnection.discover())
+            serial_devices = LoupedeckSerialConnection.discover()
+            LoupedeckDevice.logger.debug("Found %d serial devices", len(serial_devices))
+            devices.extend(serial_devices)
         if not ignore_websocket:
-            devices.extend(LoupedeckWSConnection.discover())
+            ws_devices = LoupedeckWSConnection.discover()
+            LoupedeckDevice.logger.debug("Found %d WebSocket devices", len(ws_devices))
+            devices.extend(ws_devices)
+        LoupedeckDevice.logger.info("Found %d total devices", len(devices))
         return devices
 
     def __enter__(self):
@@ -47,6 +58,9 @@ class LoupedeckDevice(EventEmitter):
         reconnect_interval: int | None = DEFAULT_RECONNECT_INTERVAL,
     ):
         super().__init__()
+        self.logger.debug("Initializing LoupedeckDevice (host=%s, path=%s, auto_connect=%s, reconnect_interval=%s)",
+                         host, path, auto_connect, reconnect_interval)
+
         self.host = host
         self.path = path
         self.reconnect_interval = reconnect_interval
@@ -68,54 +82,74 @@ class LoupedeckDevice(EventEmitter):
             COMMANDS["BUTTON_PRESS"]: self.on_button,
             COMMANDS["KNOB_ROTATE"]: self.on_rotate,
         }
+
         if auto_connect:
+            self.logger.info("Auto-connecting to device")
             try:
                 self.connect()
-            except Exception:
+            except Exception as e:
+                self.logger.error("Failed to auto-connect: %s", str(e))
                 pass
 
     def _handle_disconnect(self, data):
         """Handle disconnect event and attempt reconnection if enabled."""
+        self.logger.info("Device disconnected")
         self.emit("disconnect", data)
         if self._should_reconnect and self.reconnect_interval:
+            self.logger.info("Scheduling reconnection attempt")
             self._schedule_reconnect()
 
     def _schedule_reconnect(self):
         """Schedule a reconnection attempt."""
         if self._reconnect_task is not None:
+            self.logger.debug("Reconnection already scheduled, skipping")
             return
 
         async def reconnect_task():
+            self.logger.debug("Waiting %d ms before reconnection attempt", self.reconnect_interval)
             await asyncio.sleep(self.reconnect_interval / 1000)
             self._reconnect_task = None
             try:
+                self.logger.info("Attempting to reconnect")
                 self.connect()
+                self.logger.info("Reconnection successful")
                 self.emit("reconnect", None)
             except Exception as e:
+                self.logger.error("Reconnection failed: %s", str(e))
                 self.emit("reconnect_error", {"error": str(e)})
                 self._schedule_reconnect()
 
+        self.logger.info("Scheduling reconnection attempt")
         self.emit("reconnect_attempt", None)
         loop = asyncio.get_event_loop()
         self._reconnect_task = loop.create_task(reconnect_task())
 
     def connect(self):
+        self.logger.info("Connecting to device")
+
         if self.path:
+            self.logger.debug("Using serial connection with path: %s", self.path)
             self.connection = LoupedeckSerialConnection(self.path)
         elif self.host:
+            self.logger.debug("Using WebSocket connection with host: %s", self.host)
             self.connection = LoupedeckWSConnection(self.host)
         else:
+            self.logger.debug("No path or host specified, discovering devices")
             devices = self.list()
             if not devices:
+                self.logger.error("No devices found")
                 raise RuntimeError("No devices found")
             device = devices[0]
             conn_type = device["connectionType"]
             args = {k: v for k, v in device.items() if k != "connectionType"}
+            self.logger.info("Using discovered device: %s", args)
             self.connection = conn_type(**args)
+
         if hasattr(self.connection, "connect"):
+            self.logger.debug("Establishing connection")
             if asyncio.iscoroutinefunction(self.connection.connect):
                 import asyncio
-
+                self.logger.debug("Using asyncio for connection")
                 asyncio.get_event_loop().run_until_complete(self.connection.connect())
             else:
                 self.connection.connect()
@@ -126,22 +160,30 @@ class LoupedeckDevice(EventEmitter):
         self._disconnect_handler = self._handle_disconnect
 
         # Attach event handlers
+        self.logger.debug("Setting up event handlers")
         self.connection.on("connect", self._connect_handler)
         self.connection.on("message", self._message_handler)
         self.connection.on("disconnect", self._disconnect_handler)
+
+        self.logger.info("Connection established")
         return self
 
     def close(self):
+        self.logger.info("Closing device connection")
+
         # Cancel any pending reconnection task
         if self._reconnect_task is not None:
+            self.logger.debug("Cancelling pending reconnection task")
             self._reconnect_task.cancel()
             self._reconnect_task = None
 
         # Disable automatic reconnection
         self._should_reconnect = False
+        self.logger.debug("Disabled automatic reconnection")
 
         if self.connection:
             # Remove event listeners to prevent memory leaks
+            self.logger.debug("Removing event listeners")
             if hasattr(self, "_connect_handler"):
                 self.connection.off("connect", self._connect_handler)
             if hasattr(self, "_message_handler"):
@@ -151,34 +193,44 @@ class LoupedeckDevice(EventEmitter):
 
             # Close the connection
             if hasattr(self.connection, "close"):
+                self.logger.debug("Closing connection")
                 if asyncio.iscoroutinefunction(self.connection.close):
                     import asyncio
-
+                    self.logger.debug("Using asyncio for closing connection")
                     asyncio.get_event_loop().run_until_complete(self.connection.close())
                 else:
                     self.connection.close()
 
             # Clear connection reference
             self.connection = None
+            self.logger.info("Connection closed and reference cleared")
 
     # Simplified drawing and command helpers
     def send(self, command: int, data: bytes = b""):
         if not self.connection or not self.connection.is_ready():
+            self.logger.warning("Cannot send command: connection not ready")
             return
+
         self.transaction_id = (self.transaction_id + 1) % 256 or 1
         header = struct.pack(
             "BBB", min(3 + len(data), 0xFF), command, self.transaction_id
         )
         packet = header + data
+
+        self.logger.debug("Sending command: %d, transaction ID: %d, data length: %d", 
+                         command, self.transaction_id, len(data))
+
         if hasattr(self.connection, "send"):
             if asyncio.iscoroutinefunction(self.connection.send):
                 import asyncio
-
+                self.logger.debug("Using asyncio for sending data")
                 asyncio.get_event_loop().run_until_complete(
                     self.connection.send(packet)
                 )
             else:
                 self.connection.send(packet)
+
+        self.logger.debug("Command sent successfully")
         return self.transaction_id
 
     def set_brightness(self, value: float):

@@ -4,6 +4,7 @@ import ipaddress
 import websockets
 from ..constants import CONNECTION_TIMEOUT
 from . import Connection
+from ..logger import get_logger
 
 DISCONNECT_CODES = {
     "NORMAL": 1000,
@@ -17,8 +18,12 @@ DEFAULT_WS_PORT = 80
 class LoupedeckWSConnection(Connection):
     """WebSocket connection to a Loupedeck device."""
 
+    # Class logger
+    logger = get_logger("connection.ws")
+
     def __init__(self, host: str | None = None):
         super().__init__()
+        self.logger.debug("Initializing WebSocket connection (host=%s)", host)
         self.host = host
         self.last_tick = None
         self.connection_timeout = CONNECTION_TIMEOUT
@@ -31,13 +36,18 @@ class LoupedeckWSConnection(Connection):
         Returns:
             list: A list of dictionaries containing device information.
         """
+        cls.logger.info("Discovering Loupedeck devices on the local network")
+
         # Get local IP addresses and network ranges
         network_ranges = cls._get_local_networks()
+        cls.logger.debug("Found %d network ranges to scan", len(network_ranges))
 
         # Use asyncio to scan the network
         loop = asyncio.get_event_loop()
+        cls.logger.debug("Starting network scan")
         devices = loop.run_until_complete(cls._scan_network(network_ranges))
 
+        cls.logger.info("Found %d devices", len(devices))
         return devices
 
     @staticmethod
@@ -142,53 +152,100 @@ class LoupedeckWSConnection(Connection):
             return None
 
     async def connect(self):
+        self.logger.info("Connecting to WebSocket server")
         if not self.host:
+            self.logger.error("Cannot connect: host is required")
             raise ValueError("host is required")
+
         self.address = f"ws://{self.host}"
-        self.connection = await websockets.connect(self.address)
-        self.last_tick = asyncio.get_event_loop().time()
-        self._keepalive_task = asyncio.create_task(self._check_connected())
-        self.emit("connect", {"address": self.address})
+        self.logger.debug("Connecting to %s", self.address)
+
+        try:
+            self.connection = await websockets.connect(self.address)
+            self.logger.debug("WebSocket connection established")
+
+            self.last_tick = asyncio.get_event_loop().time()
+            self._keepalive_task = asyncio.create_task(self._check_connected())
+            self.logger.debug("Started keepalive task")
+
+            self.emit("connect", {"address": self.address})
+            self.logger.info("Connection successful")
+        except Exception as e:
+            self.logger.error("Connection failed: %s", str(e))
+            raise
 
     async def close(self):
+        self.logger.info("Closing WebSocket connection")
+
         # Cancel the keepalive task if it exists
         if self._keepalive_task is not None:
+            self.logger.debug("Cancelling keepalive task")
             self._keepalive_task.cancel()
             self._keepalive_task = None
 
         if self.connection:
             try:
                 # Close the WebSocket connection
+                self.logger.debug("Closing WebSocket connection")
                 await self.connection.close()
-            except Exception:
-                # Ignore errors during cleanup
+                self.logger.debug("WebSocket connection closed")
+            except Exception as e:
+                # Log but ignore errors during cleanup
+                self.logger.warning("Error during connection close: %s", str(e))
                 pass
 
             # Clear connection reference
             self.connection = None
+            self.logger.debug("Connection reference cleared")
 
         # Reset last tick
         self.last_tick = None
 
         # Emit disconnect event
         self.emit("disconnect", None)
+        self.logger.info("Disconnected")
 
     def is_ready(self):
-        return self.connection and not self.connection.closed
+        is_ready = self.connection and not self.connection.closed
+        self.logger.debug("Connection ready: %s", is_ready)
+        return is_ready
 
     async def _check_connected(self):
+        self.logger.debug("Starting connection keepalive check")
         while self.is_ready():
             await asyncio.sleep(self.connection_timeout / 1000)
+
             if (
                 asyncio.get_event_loop().time() - self.last_tick
             ) * 1000 > self.connection_timeout:
+                self.logger.warning("Connection timed out, closing")
                 await self.connection.close(code=DISCONNECT_CODES["TIMEOUT"])
                 break
 
+        self.logger.debug("Keepalive check ended")
+
     async def read(self):
-        async for message in self.connection:
-            self.last_tick = asyncio.get_event_loop().time()
-            self.emit("message", message)
+        self.logger.debug("Starting to read messages")
+        try:
+            async for message in self.connection:
+                self.last_tick = asyncio.get_event_loop().time()
+                self.logger.debug("Received message (%d bytes)", len(message))
+                self.emit("message", message)
+        except Exception as e:
+            self.logger.error("Error reading from connection: %s", str(e))
+            raise
+        finally:
+            self.logger.debug("Stopped reading messages")
 
     async def send(self, data: bytes):
-        await self.connection.send(data)
+        if not self.is_ready():
+            self.logger.warning("Cannot send data: connection not ready")
+            return
+
+        self.logger.debug("Sending data (%d bytes)", len(data))
+        try:
+            await self.connection.send(data)
+            self.logger.debug("Data sent successfully")
+        except Exception as e:
+            self.logger.error("Error sending data: %s", str(e))
+            raise
